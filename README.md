@@ -3,7 +3,7 @@ Prolog
 
 `pydjamodb` library is Django connector to the AWS DynamoDB. As a base is used `PynamoDB` library which models is transformed into `Django` model structure with the querysets and managers.
 
-[![Coverage Status](https://coveralls.io/repos/github/druids/pydjamodb/badge.svg?branch=master)](https://coveralls.io/github/druids/pydjamodb?branch=master)
+[![Coverage Status](https://coveralls.io/repos/github/skip-pay/pydjamodb/badge.svg?branch=master)](https://coveralls.io/github/skip-pay/pydjamodb?branch=master)
 
 Installation
 ------------
@@ -11,7 +11,7 @@ Installation
 - Install `pydjamodb` with the `pip` command:
 
 ```bash
-pip install pydjamodb
+pip install skip-pydjamodb
 ```
 
 - Set ``pydjamodb.test_runner.DynamoDBTestDiscoverRunner`` as your Django test runner:
