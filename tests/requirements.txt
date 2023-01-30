@@ -1,5 +1,5 @@
 django>=2.0, <4.0
 pynamodb==5.3.4
-skip-django-germanium==2.3.6.1
+skip-django-germanium==2.3.7.1
 flake8
 coveralls
