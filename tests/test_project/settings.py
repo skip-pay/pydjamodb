@@ -132,6 +132,11 @@ PYDJAMODB_DATABASE = {
     'TAGS': {
         'Project': 'pydjamodb',
         'Name': '{table_name}',
+    },
+    'LOGGING': {
+        'pydjamodbtest': {
+            'RETURN_CONSUMED_CAPACITY': 'INDEXES'
+        }
     }
 }
 

@@ -1,11 +1,16 @@
+import logging
 import time
 
 from django.conf import settings
 
 from pynamodb.connection.table import TableConnection as BaseTableConnection
+from pynamodb.constants import BATCH_WRITE_ITEM, CONSUMED_CAPACITY
 from pynamodb.exceptions import TableDoesNotExist
+from pynamodb.util import attribute_value_to_json
 
 from botocore.client import ClientError
+
+logger = logging.getLogger('pydjamodb.units')
 
 
 class TableConnection(BaseTableConnection):
@@ -22,6 +27,7 @@ class TableConnection(BaseTableConnection):
                  aws_access_key_id=None,
                  aws_secret_access_key=None,
                  aws_session_token=None):
+        self.table_name_postfix = table_name
         table_name = '{}-{}'.format(settings.PYDJAMODB_DATABASE['TABLE_PREFIX'], table_name)
         region = settings.PYDJAMODB_DATABASE.get('AWS_REGION') if region is None else region
         host = settings.PYDJAMODB_DATABASE.get('HOST') if host is None else host
@@ -126,6 +132,36 @@ class TableConnection(BaseTableConnection):
             return True
         except TableDoesNotExist:
             return False
+
+    def _get_logging_settings(self):
+        logging_settings = settings.PYDJAMODB_DATABASE.get('LOGGING', {})
+        table_settings = logging_settings.get(self.table_name_postfix, {})
+        return table_settings.get('RETURN_CONSUMED_CAPACITY'), table_settings.get('COLUMNS', set())
+
+    def batch_write_item(
+        self,
+        put_items=None,
+        return_consumed_capacity=None,
+        *args,
+        **kwargs
+    ):
+        consumed_capacity_settings, columns = self._get_logging_settings()
+        data = super().batch_write_item(
+            put_items=put_items,
+            return_consumed_capacity=consumed_capacity_settings or return_consumed_capacity,
+            *args,
+            **kwargs
+        )
+        if data and CONSUMED_CAPACITY in data:
+            updated_columns = [
+                {key: attribute_value_to_json(val) for key, val in item.items() if key in columns}
+                for item in put_items
+            ]
+            logger.info("Dynamodb: %s called", BATCH_WRITE_ITEM, extra={
+                'consumed_capacity': data.get(CONSUMED_CAPACITY),
+                'updated_columns': updated_columns,
+            })
+        return data
 
     def set_point_in_time_recovery(self, enabled=True):
         for i in range(0, self.connection._max_retry_attempts_exception + 1):
