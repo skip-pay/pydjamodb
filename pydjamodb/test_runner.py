@@ -20,8 +20,14 @@ except ImportError:
 
 def init_pynamodb_test_prefix(prefix=None):
     for model_class in dynamodb_model_classes:
-        model_class._connection = None
-        model_class._connection = TestTableConnection(model_class._get_connection(), prefix)
+        if isinstance(model_class._connection, TestTableConnection):
+            # Botocore's underlying network implementation does not work well when accessed from multiple subprocessses.
+            # We must ensure, that no new connection is created in a subprocess. At this point, in a subprocess, we
+            # always have existing connection from the parent process, which we can use.
+            model_class._connection.set_table_name(prefix)
+        else:
+            model_class._connection = None
+            model_class._connection = TestTableConnection(model_class._get_connection(), prefix)
 
 
 def remove_pynamodb_table(model_class):
