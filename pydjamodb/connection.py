@@ -1,4 +1,5 @@
 import logging
+import multiprocessing
 import time
 
 from django.conf import settings
@@ -11,6 +12,7 @@ from pynamodb.util import attribute_value_to_json
 from botocore.client import ClientError
 
 logger = logging.getLogger('pydjamodb.units')
+connection_lock = multiprocessing.RLock()
 
 
 class TableConnection(BaseTableConnection):
@@ -183,14 +185,30 @@ class TestTableConnection:
 
     def __init__(self, wrapped_connection, prefix=None):
         self._wrapped_connection = wrapped_connection
+        self._wrapped_table_name = wrapped_connection.table_name
         self._is_test_clean_required = False
-        if prefix:
-            self._wrapped_connection.table_name = 'test_{}_{}'.format(prefix, self._wrapped_connection.table_name)
-        else:
-            self._wrapped_connection.table_name = 'test_{}'.format(self._wrapped_connection.table_name)
+        self._patch_connection()
+        self.set_table_name(prefix)
 
     def __getattr__(self, attr):
         return getattr(self._wrapped_connection, attr)
+
+    def _patch_connection(self):
+        original_method = self._wrapped_connection.connection.client._endpoint.http_session.send
+
+        def patched_method(*args, **kwargs):
+            with connection_lock:
+                # Botocore's underlying network implementation does not work well when accessed from multiple
+                # subprocessses. We must ensure that only one subprocess at a time uses the network connection.
+                return original_method(*args, **kwargs)
+
+        self._wrapped_connection.connection.client._endpoint.http_session.send = patched_method
+
+    def set_table_name(self, prefix=None):
+        if prefix:
+            self._wrapped_connection.table_name = 'test_{}_{}'.format(prefix, self._wrapped_table_name)
+        else:
+            self._wrapped_connection.table_name = 'test_{}'.format(self._wrapped_table_name)
 
     def update_item(self, *args, **kwargs):
         self._is_test_clean_required = True
