@@ -1,5 +1,6 @@
-django>=2.0, <4.0
+django~=4.2
+botocore==1.29.165
 pynamodb==5.3.4
-skip-django-germanium==2.3.7.1
+skip-django-germanium @ git+https://github.com/skip-pay/germanium@tda/chore/django_bump
 flake8
 coveralls

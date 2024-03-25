@@ -1,8 +1,10 @@
+import multiprocessing
 import os
 import sys
 
+import django
 from django.db import connections
-from django.test.runner import ParallelTestSuite, DiscoverRunner
+from django.test.runner import ParallelTestSuite, DiscoverRunner, setup_test_environment
 
 from .connection import TestTableConnection
 from .models import dynamodb_model_classes
@@ -37,22 +39,45 @@ def recreate_pynamodb_table(model_class):
 _worker_id = 0
 
 
-def _init_worker(counter):
+def _init_worker(
+    counter,
+    initial_settings=None,
+    serialized_contents=None,
+    process_setup=None,
+    process_setup_args=None,
+    debug_mode=None,
+):
+    """
+    Switch to databases dedicated to this worker.
+
+    This helper lives at module-level because of the multiprocessing module's
+    requirements.
+    """
+
     global _worker_id
 
     with counter.get_lock():
         counter.value += 1
         _worker_id = counter.value
 
+    start_method = multiprocessing.get_start_method()
+
+    if start_method == "spawn":
+        if process_setup and callable(process_setup):
+            if process_setup_args is None:
+                process_setup_args = ()
+            process_setup(*process_setup_args)
+        django.setup()
+        setup_test_environment(debug=debug_mode)
+
     for alias in connections:
         connection = connections[alias]
-        settings_dict = connection.creation.get_test_db_clone_settings(str(_worker_id))
-        # connection.settings_dict must be updated in place for changes to be
-        # reflected in django.db.connections. If the following line assigned
-        # connection.settings_dict = settings_dict, new threads would connect
-        # to the default database instead of the appropriate clone.
-        connection.settings_dict.update(settings_dict)
-        connection.close()
+        if start_method == "spawn":
+            # Restore initial settings in spawned processes.
+            connection.settings_dict.update(initial_settings[alias])
+            if value := serialized_contents.get(alias):
+                connection._test_serialized_contents = value
+        connection.creation.setup_worker_connection(_worker_id)
 
     init_pynamodb_test_prefix(_worker_id)
 
