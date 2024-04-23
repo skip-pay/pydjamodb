@@ -96,7 +96,7 @@ class DynamoDBTestSuiteMixin:
 
     parallel_test_suite = DynamoDBParallelTestSuite
 
-    def log(self, msg):
+    def log(self, msg, level=None):
         sys.stderr.write(msg + os.linesep)
 
     def _teardown_pynamodb_database(self, prefix=None):
